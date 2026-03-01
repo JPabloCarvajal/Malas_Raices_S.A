@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/models.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 /// Pantalla de detalle completo de una propiedad (RF-011).
 ///
@@ -195,7 +196,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                   decoration: BoxDecoration(
                     color: _fotoActual == index
                         ? Colors.white
-                        : Colors.white.withOpacity(0.5),
+                        : Colors.white.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(4),
                   ),
                 );
@@ -239,7 +240,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: AppTheme.primaryColor.withOpacity(0.1),
+            color: AppTheme.primaryColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
@@ -279,7 +280,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
         Expanded(
           child: _chipCaracteristica(
             Icons.square_foot,
-            '${propiedad.areaMt2.toStringAsFixed(0)}',
+            propiedad.areaMt2.toStringAsFixed(0),
             'm²',
           ),
         ),
@@ -318,6 +319,12 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
 
   /// Caja gris que representa donde irá el mapa de Google Maps.
   Widget _buildPlaceholderMapa(Propiedad propiedad) {
+    // Definimos la posición inicial basada en la propiedad
+    final CameraPosition posicionInicial = CameraPosition(
+      target: LatLng(propiedad.ubicacion.latitud, propiedad.ubicacion.longitud),
+      zoom: 15,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -330,34 +337,34 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        Container(
-          height: 180,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.grey[200],
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey[300]!),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.map_outlined, size: 48, color: Colors.grey[400]),
-              const SizedBox(height: 8),
-              Text(
-                'Mapa interactivo',
-                style: TextStyle(
-                  color: Colors.grey[500],
-                  fontWeight: FontWeight.w500,
+        ClipRRect(
+          // Para mantener los bordes redondeados que ya tenías
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            height: 180,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              border: Border.all(color: Colors.grey[300]!),
+            ),
+            child: GoogleMap(
+              initialCameraPosition: posicionInicial,
+              markers: {
+                Marker(
+                  markerId: const MarkerId('propiedad_loc'),
+                  position: LatLng(
+                    propiedad.ubicacion.latitud,
+                    propiedad.ubicacion.longitud,
+                  ),
+                  infoWindow: InfoWindow(title: propiedad.titulo),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Lat: ${propiedad.ubicacion.latitud.toStringAsFixed(4)}, '
-                'Lng: ${propiedad.ubicacion.longitud.toStringAsFixed(4)}',
-                style: TextStyle(fontSize: 12, color: Colors.grey[400]),
-              ),
-              // TODO: Reemplazar con GoogleMap widget.
-            ],
+              },
+              // Configuraciones recomendadas para una vista de detalle:
+              zoomControlsEnabled: false,
+              myLocationButtonEnabled: false,
+              scrollGesturesEnabled:
+                  false, // Evita que el mapa se mueva al hacer scroll en la pantalla
+            ),
           ),
         ),
       ],
@@ -372,7 +379,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 8,
             offset: const Offset(0, -2),
           ),
