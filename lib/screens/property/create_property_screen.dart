@@ -379,7 +379,7 @@ class _CreatePropertyScreenState extends State<CreatePropertyScreen> {
         ),
         const SizedBox(height: 6),
         DropdownButtonFormField<TipoPropiedad>(
-          value: _tipoSeleccionado,
+          initialValue: _tipoSeleccionado,
           items: TipoPropiedad.values.map((tipo) {
             return DropdownMenuItem(value: tipo, child: Text(tipo.label));
           }).toList(),

@@ -226,7 +226,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         decoration: BoxDecoration(
           // Fondo azul claro si está seleccionado, blanco si no.
           color: seleccionado
-              ? AppTheme.primaryColor.withOpacity(0.08)
+              ? AppTheme.primaryColor.withValues(alpha: 0.08)
               : Colors.white,
           borderRadius: BorderRadius.circular(12),
           // Borde azul grueso si está seleccionado, gris fino si no.
