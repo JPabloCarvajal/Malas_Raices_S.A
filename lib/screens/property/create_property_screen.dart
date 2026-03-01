@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/tipo_propiedad.dart';
 import '../../widgets/custom_text_field.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 
 /// Pantalla para crear una nueva publicación de propiedad (RF-004).
 ///
@@ -21,6 +24,9 @@ class CreatePropertyScreen extends StatefulWidget {
 
 class _CreatePropertyScreenState extends State<CreatePropertyScreen> {
   final _formKey = GlobalKey<FormState>();
+  LatLng? _ubicacionSeleccionada;
+  // Coordenadas iniciales (Bucaramanga como punto de partida)
+  static const LatLng _puntoInicial = LatLng(7.1193, -73.1227);
 
   // Un controlador por cada campo de texto.
   final _tituloController = TextEditingController();
@@ -65,6 +71,19 @@ class _CreatePropertyScreenState extends State<CreatePropertyScreen> {
         );
         return;
       }
+      if (_ubicacionSeleccionada == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Por favor, selecciona la ubicación en el mapa'),
+            backgroundColor: AppTheme.warningColor,
+          ),
+        );
+        return;
+      }
+      print('Datos listos para enviar:');
+      print(
+        'Coordenadas: ${_ubicacionSeleccionada!.latitude}, ${_ubicacionSeleccionada!.longitude}',
+      );
 
       // TODO: Crear objeto Propiedad y enviarlo al backend.
       ScaffoldMessenger.of(context).showSnackBar(
@@ -379,33 +398,59 @@ class _CreatePropertyScreenState extends State<CreatePropertyScreen> {
 
   /// Placeholder del selector de mapa (RF-006).
   Widget _buildPlaceholderMapa() {
-    return GestureDetector(
-      onTap: () {
-        // TODO: Abrir Google Maps para seleccionar ubicación.
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Selector de mapa próximamente')),
-        );
-      },
-      child: Container(
-        height: 140,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[300]!),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Selecciona la ubicación exacta',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.map_outlined, size: 40, color: Colors.grey[400]),
-            const SizedBox(height: 8),
-            Text(
-              'Toca para fijar ubicación en el mapa',
-              style: TextStyle(color: Colors.grey[500], fontSize: 13),
+        const SizedBox(height: 8),
+        Container(
+          height: 250, // Un poco más alto para mejor interacción
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: GoogleMap(
+              initialCameraPosition: const CameraPosition(
+                target: _puntoInicial,
+                zoom: 14,
+              ),
+              // Esto permite que el mapa capture los gestos dentro del scroll
+              gestureRecognizers: {
+                Factory<OneSequenceGestureRecognizer>(
+                  () => EagerGestureRecognizer(),
+                ),
+              },
+              onTap: (LatLng posicion) {
+                setState(() {
+                  _ubicacionSeleccionada = posicion;
+                });
+              },
+              markers: _ubicacionSeleccionada == null
+                  ? {}
+                  : {
+                      Marker(
+                        markerId: const MarkerId('seleccion'),
+                        position: _ubicacionSeleccionada!,
+                      ),
+                    },
             ),
-          ],
+          ),
         ),
-      ),
+        if (_ubicacionSeleccionada != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Text(
+              'Ubicación marcada: ${_ubicacionSeleccionada!.latitude.toStringAsFixed(4)}, ${_ubicacionSeleccionada!.longitude.toStringAsFixed(4)}',
+              style: const TextStyle(fontSize: 12, color: Colors.green),
+            ),
+          ),
+      ],
     );
   }
 }
