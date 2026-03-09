@@ -15,8 +15,7 @@ App móvil en Flutter para gestión de propiedades en arriendo con backend en Fa
 </p>
 
 ## Previsualización
-
-![videoap](https://github.com/user-attachments/assets/58d5b169-77bc-45eb-bbec-3f1caeef6312)
+![previsual](https://github.com/user-attachments/assets/a92e0366-152a-4363-99bf-9e3f405a5de6)
 
 ## Instalación
 
