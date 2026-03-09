@@ -2,11 +2,21 @@
 
 App móvil en Flutter para gestión de propiedades en arriendo con backend en FastAPI.
 
-## Requisitos
 
-- Flutter 3.0+
-- Python 3.10+
-- pip
+## Tecnologías
+
+<p align="center">
+  <img alt="Flutter" src="https://img.shields.io/badge/dart-Language-blue?logo=dart">
+  <img alt="Flutter" src="https://img.shields.io/badge/flutter-Framework-blue?logo=FLUTTER">
+  <img alt="Py" src="https://img.shields.io/badge/Python-Api-yellow?logo=Python">
+  <img alt="Api" src="https://img.shields.io/badge/Pip-Api_Images_Management-yellow?logo=Python">
+  <img alt="Api" src="https://img.shields.io/badge/FastApi-Api_Develoment-green?logo=FastApi">
+  <img alt="Db" src="https://img.shields.io/badge/json-Api_Database-white?logo=json">
+</p>
+
+## Previsualización
+
+![videoap](https://github.com/user-attachments/assets/a686fbb2-81be-47eb-8140-8099b60a607d)
 
 ## Instalación
 
@@ -62,7 +72,10 @@ Ahí puedes probar todos los endpoints de forma interactiva.
 - **Base de datos:** Archivos JSON
 - **Almacenamiento de imágenes:** Carpeta /uploads en el servidor
 
-## Autor
+## Autores
 
 Juan Pablo Carvajal Giraldo
+Desarrollo de Aplicaciones Móviles — UPB Bucaramanga
+
+Pedro Mateo Espinel Dominguez
 Desarrollo de Aplicaciones Móviles — UPB Bucaramanga
