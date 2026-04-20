@@ -1,5 +1,3 @@
-/// Modelo que representa la ubicación geográfica de una propiedad.
-/// Corresponde a la clase «Ubicacion» del diagrama de clases (RF-006).
 class Ubicacion {
   final int idUbicacion;
   final double latitud;
@@ -17,8 +15,24 @@ class Ubicacion {
     required this.barrio,
   });
 
-  /// Devuelve la dirección en formato legible para la UI.
   String get direccionFormateada => '$direccionCompleta, $barrio, $ciudad';
 
-  // TODO: Agregar factory Ubicacion.fromJson() cuando se conecte la API.
+  factory Ubicacion.fromJson(Map<String, dynamic> json) {
+    return Ubicacion(
+      idUbicacion: json['id_ubicacion'] ?? json['id'] ?? 0,
+      latitud: (json['latitud'] ?? 0).toDouble(),
+      longitud: (json['longitud'] ?? 0).toDouble(),
+      direccionCompleta: (json['direccion_completa'] ?? '').toString(),
+      ciudad: (json['ciudad'] ?? '').toString(),
+      barrio: (json['barrio'] ?? '').toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'latitud': latitud,
+        'longitud': longitud,
+        'direccion_completa': direccionCompleta,
+        'ciudad': ciudad,
+        'barrio': barrio,
+      };
 }

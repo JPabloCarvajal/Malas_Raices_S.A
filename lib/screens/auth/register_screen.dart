@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../widgets/custom_text_field.dart';
+import '../../services/auth_service.dart';
+
+bool _cargando = false;
 
 /// Pantalla de registro de nuevos usuarios (RF-001).
 ///
@@ -34,20 +37,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _onRegistrar() {
-    if (_formKey.currentState?.validate() ?? false) {
-      // TODO: Enviar datos al backend para crear la cuenta.
+  Future<void> _onRegistrar() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
-      // Mostramos mensaje de éxito.
+    setState(() => _cargando = true);
+    try {
+      await AuthService().registro(
+        nombre: _nombreController.text.trim(),
+        email: _emailController.text.trim(),
+        telefono: _telefonoController.text.trim(),
+        password: _passwordController.text,
+        tipoUsuario: _tipoSeleccionado,
+      );
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Cuenta creada exitosamente'),
+          content: Text('Cuenta creada. Inicia sesión.'),
           backgroundColor: AppTheme.successColor,
         ),
       );
-
-      // Volvemos al login para que inicie sesión.
       Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _cargando = false);
     }
   }
 

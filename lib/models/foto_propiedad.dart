@@ -1,8 +1,3 @@
-/// Modelo que representa una foto asociada a una propiedad.
-/// Corresponde a la clase «FotoPropiedad» del diagrama de clases (RF-005).
-///
-/// Relación de composición: una FotoPropiedad NO existe sin su Propiedad.
-/// Cada propiedad puede tener entre 1 y 15 fotos.
 class FotoPropiedad {
   final int idFoto;
   final String urlImagen;
@@ -16,5 +11,19 @@ class FotoPropiedad {
     required this.fechaSubida,
   });
 
-  // TODO: Agregar factory FotoPropiedad.fromJson() cuando se conecte la API.
+  factory FotoPropiedad.fromJson(Map<String, dynamic> json) {
+    return FotoPropiedad(
+      idFoto: json['id_foto'] ?? json['id'] ?? 0,
+      urlImagen: (json['url_imagen'] ?? '').toString(),
+      ordenVisualizacion: json['orden_visualizacion'] ?? 1,
+      fechaSubida:
+          DateTime.tryParse(json['fecha_subida']?.toString() ?? '') ??
+          DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'url_imagen': urlImagen,
+    'orden_visualizacion': ordenVisualizacion,
+  };
 }

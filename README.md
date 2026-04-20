@@ -79,7 +79,7 @@ Desarrollo de Aplicaciones Móviles — UPB Bucaramanga
 Pedro Mateo Espinel Dominguez
 Desarrollo de Aplicaciones Móviles — UPB Bucaramanga
 
-Juan Pablo Aguilar Latorre
+Daniel Felipe Aguilar Latorre
 Desarrollo de Aplicaciones Móviles — UPB Bucaramanga
 
 Juan David Monsalve
