@@ -5,6 +5,7 @@ import '../../widgets/custom_text_field.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
+import '../../services/propiedades_service.dart';
 
 /// Pantalla para crear una nueva publicación de propiedad (RF-004).
 ///
@@ -41,9 +42,9 @@ class _CreatePropertyScreenState extends State<CreatePropertyScreen> {
 
   // Tipo de propiedad seleccionado en el dropdown.
   TipoPropiedad _tipoSeleccionado = TipoPropiedad.apartamento;
-
   // Simula cuántas fotos ha seleccionado el usuario.
   int _fotosSeleccionadas = 0;
+  bool _cargando = false;
 
   @override
   void dispose() {
@@ -59,40 +60,63 @@ class _CreatePropertyScreenState extends State<CreatePropertyScreen> {
     super.dispose();
   }
 
-  void _onPublicar() {
-    if (_formKey.currentState?.validate() ?? false) {
-      // Validar mínimo 1 foto (RF-005).
-      if (_fotosSeleccionadas < 1) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Debes agregar al menos 1 foto'),
-            backgroundColor: AppTheme.warningColor,
-          ),
-        );
-        return;
-      }
-      if (_ubicacionSeleccionada == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Por favor, selecciona la ubicación en el mapa'),
-            backgroundColor: AppTheme.warningColor,
-          ),
-        );
-        return;
-      }
-      print('Datos listos para enviar:');
-      print(
-        'Coordenadas: ${_ubicacionSeleccionada!.latitude}, ${_ubicacionSeleccionada!.longitude}',
-      );
-
-      // TODO: Crear objeto Propiedad y enviarlo al backend.
+  Future<void> _onPublicar() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_fotosSeleccionadas < 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Propiedad publicada exitosamente'),
+          content: Text('Debes agregar al menos 1 foto'),
+          backgroundColor: AppTheme.warningColor,
+        ),
+      );
+      return;
+    }
+    if (_ubicacionSeleccionada == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecciona la ubicación en el mapa'),
+          backgroundColor: AppTheme.warningColor,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _cargando = true);
+    try {
+      await PropiedadesService().crear({
+        'titulo': _tituloController.text.trim(),
+        'descripcion': _descripcionController.text.trim(),
+        'precio': double.parse(_precioController.text),
+        'direccion': _direccionController.text.trim(),
+        'ciudad': _ciudadController.text.trim(),
+        'barrio': _barrioController.text.trim(),
+        'num_habitaciones': int.parse(_habitacionesController.text),
+        'num_banos': int.parse(_banosController.text),
+        'area_mt2': double.parse(_areaController.text),
+        'tipo_propiedad': _tipoSeleccionado.name,
+        'latitud': _ubicacionSeleccionada!.latitude,
+        'longitud': _ubicacionSeleccionada!.longitude,
+        // TODO: implementar upload real con POST /imagenes/subir-multiple.
+        // Por ahora mandamos un placeholder para que el backend acepte.
+        'fotos': [
+          'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600',
+        ],
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Propiedad publicada'),
           backgroundColor: AppTheme.successColor,
         ),
       );
-      Navigator.pop(context);
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _cargando = false);
     }
   }
 
@@ -290,11 +314,20 @@ class _CreatePropertyScreenState extends State<CreatePropertyScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: _onPublicar,
-                  icon: const Icon(Icons.publish),
-                  label: const Text(
-                    'Publicar propiedad',
-                    style: TextStyle(fontSize: 16),
+                  onPressed: _cargando ? null : _onPublicar,
+                  icon: _cargando
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.publish),
+                  label: Text(
+                    _cargando ? 'Publicando...' : 'Publicar propiedad',
+                    style: const TextStyle(fontSize: 16),
                   ),
                 ),
               ),

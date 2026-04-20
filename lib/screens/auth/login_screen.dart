@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../config/routes.dart';
+import '../../services/auth_service.dart';
+import '../../services/biometric_service.dart';
 import '../../widgets/custom_text_field.dart';
 
-/// Pantalla de inicio de sesión (RF-002).
-///
-/// Por ahora no valida contra una base de datos real.
-/// Al presionar "Iniciar sesión" simplemente navega al Home.
-///
-/// TODO: Conectar con autenticación real cuando haya backend.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -17,51 +13,112 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // Controladores para leer el texto de cada campo.
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
-  // Llave del formulario para validar todos los campos de golpe.
   final _formKey = GlobalKey<FormState>();
+  final _authService = AuthService();
+  final _biometricService = BiometricService();
+
+  bool _cargando = false;
+  bool _huellaDisponible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _verificarHuella();
+  }
+
+  Future<void> _verificarHuella() async {
+    final disponible = await _biometricService.disponible();
+    final activada = await _biometricService.estaActivado();
+    if (mounted) setState(() => _huellaDisponible = disponible && activada);
+  }
 
   @override
   void dispose() {
-    // SIEMPRE liberar los controladores al destruir la pantalla.
-    // Si no haces esto, se quedan en memoria sin motivo (memory leak).
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  /// Se ejecuta al presionar el botón "Iniciar sesión".
-  void _onLogin() {
-    // validate() recorre todos los campos del Form y ejecuta sus validators.
-    if (_formKey.currentState?.validate() ?? false) {
-      // TODO: Aquí iría la llamada al servicio de autenticación.
-      // Por ahora navegamos directo al Home.
+  Future<void> _hacerLogin(String email, String password) async {
+    setState(() => _cargando = true);
+    try {
+      await _authService.login(email, password);
+      if (!mounted) return;
+
+      // Si es el primer login y hay biometría, preguntamos si quiere activarla
+      final disponible = await _biometricService.disponible();
+      final yaActivada = await _biometricService.estaActivado();
+      if (disponible && !yaActivada && mounted) {
+        final activar = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('¿Activar huella digital?'),
+            content: const Text(
+              'Podrás iniciar sesión más rápido usando tu huella.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Ahora no'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Activar'),
+              ),
+            ],
+          ),
+        );
+        if (activar == true) {
+          await _biometricService.activar(email: email, password: password);
+        }
+      }
+
+      if (!mounted) return;
       Navigator.pushReplacementNamed(context, AppRoutes.home);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _cargando = false);
     }
+  }
+
+  void _onLogin() {
+    if (_formKey.currentState?.validate() ?? false) {
+      _hacerLogin(_emailController.text.trim(), _passwordController.text);
+    }
+  }
+
+  Future<void> _onLoginHuella() async {
+    final credenciales = await _biometricService
+        .autenticarYObtenerCredenciales();
+    if (credenciales == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Autenticación cancelada o inválida')),
+      );
+      return;
+    }
+    await _hacerLogin(credenciales['email']!, credenciales['password']!);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Sin AppBar para que se vea como pantalla de bienvenida limpia.
       body: SafeArea(
-        // SafeArea evita que el contenido se meta debajo del notch o la barra de estado.
         child: Center(
           child: SingleChildScrollView(
-            // SingleChildScrollView: si el teclado cubre los campos,
-            // el usuario puede hacer scroll para verlos. Sin esto,
-            // los campos de abajo quedarían tapados.
             padding: const EdgeInsets.symmetric(horizontal: 28),
             child: Form(
               key: _formKey,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // ─── Logo e identidad visual ───
-                  Icon(
+                  const Icon(
                     Icons.home_work_rounded,
                     size: 72,
                     color: AppTheme.primaryColor,
@@ -84,59 +141,62 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 40),
-
-                  // ─── Campo de correo ───
                   CustomTextField(
                     label: 'Correo electrónico',
                     hint: 'ejemplo@correo.com',
                     controller: _emailController,
                     prefixIcon: Icons.email_outlined,
                     keyboardType: TextInputType.emailAddress,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Ingresa tu correo electrónico';
-                      }
-                      if (!value.contains('@') || !value.contains('.')) {
-                        return 'Ingresa un correo válido';
-                      }
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Ingresa tu correo';
+                      if (!v.contains('@') || !v.contains('.'))
+                        return 'Correo inválido';
                       return null;
                     },
                   ),
                   const SizedBox(height: 16),
-
-                  // ─── Campo de contraseña ───
                   CustomTextField(
                     label: 'Contraseña',
                     hint: '••••••••',
                     controller: _passwordController,
                     prefixIcon: Icons.lock_outline,
-                    obscureText: true, // Oculta el texto con puntos.
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
+                    obscureText: true,
+                    validator: (v) {
+                      if (v == null || v.isEmpty)
                         return 'Ingresa tu contraseña';
-                      }
-                      if (value.length < 6) {
-                        return 'Mínimo 6 caracteres';
-                      }
+                      if (v.length < 6) return 'Mínimo 6 caracteres';
                       return null;
                     },
                   ),
                   const SizedBox(height: 28),
-
-                  // ─── Botón de iniciar sesión ───
                   SizedBox(
-                    width: double.infinity, // Ocupa todo el ancho disponible.
+                    width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _onLogin,
-                      child: const Text(
-                        'Iniciar sesión',
-                        style: TextStyle(fontSize: 16),
-                      ),
+                      onPressed: _cargando ? null : _onLogin,
+                      child: _cargando
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Iniciar sesión',
+                              style: TextStyle(fontSize: 16),
+                            ),
                     ),
                   ),
+                  if (_huellaDisponible) ...[
+                    const SizedBox(height: 14),
+                    OutlinedButton.icon(
+                      onPressed: _cargando ? null : _onLoginHuella,
+                      icon: const Icon(Icons.fingerprint, size: 24),
+                      label: const Text('Entrar con huella'),
+                    ),
+                  ],
                   const SizedBox(height: 16),
-
-                  // ─── Enlace a registro ───
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -145,11 +205,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: TextStyle(color: AppTheme.textSecondary),
                       ),
                       GestureDetector(
-                        onTap: () {
-                          // pushNamed (sin Replacement) porque desde registro
-                          // SÍ queremos poder volver al login con "atrás".
-                          Navigator.pushNamed(context, AppRoutes.register);
-                        },
+                        onTap: () =>
+                            Navigator.pushNamed(context, AppRoutes.register),
                         child: const Text(
                           'Regístrate',
                           style: TextStyle(

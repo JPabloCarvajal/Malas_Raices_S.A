@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../config/routes.dart';
-import '../../data/mock_data.dart';
 import '../../models/models.dart';
+import '../../services/propiedades_service.dart';
+import '../../services/favoritos_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/property_card.dart';
 import '../../widgets/filter_bottom_sheet.dart';
 import '../property/property_detail_screen.dart';
 
-/// Pantalla principal de la app.
-/// Muestra el listado de propiedades con búsqueda y filtros.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -18,19 +18,20 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
+  final _propiedadesService = PropiedadesService();
+  final _favoritosService = FavoritosService();
+  final _authService = AuthService();
 
-  // Lista que se muestra en pantalla (cambia con la búsqueda).
+  List<Propiedad> _todas = [];
   List<Propiedad> _propiedadesMostradas = [];
-
-  // IDs de favoritos del usuario actual.
   List<int> _favoritosIds = [];
+  Usuario? _usuarioActual;
+  bool _cargando = true;
 
   @override
   void initState() {
     super.initState();
-    // Cargamos datos iniciales del mock.
-    _propiedadesMostradas = MockData.propiedadesActivas;
-    _favoritosIds = List.from(MockData.favoritosIds);
+    _cargarDatos();
   }
 
   @override
@@ -39,36 +40,70 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  /// Filtra propiedades según el texto de búsqueda (RF-009).
+  Future<void> _cargarDatos() async {
+    setState(() => _cargando = true);
+    try {
+      final results = await Future.wait([
+        _propiedadesService.listarActivas(),
+        _favoritosService.listarIds(),
+        _authService.getUsuarioLocal(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _todas = results[0] as List<Propiedad>;
+        _propiedadesMostradas = _todas;
+        _favoritosIds = results[1] as List<int>;
+        _usuarioActual = results[2] as Usuario?;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
+  }
+
   void _buscar(String query) {
     setState(() {
       if (query.isEmpty) {
-        _propiedadesMostradas = MockData.propiedadesActivas;
+        _propiedadesMostradas = _todas;
       } else {
-        final queryLower = query.toLowerCase();
-        _propiedadesMostradas = MockData.propiedadesActivas.where((p) {
-          return p.titulo.toLowerCase().contains(queryLower) ||
-              p.descripcion.toLowerCase().contains(queryLower) ||
-              p.barrio.toLowerCase().contains(queryLower) ||
-              p.ciudad.toLowerCase().contains(queryLower);
+        final q = query.toLowerCase();
+        _propiedadesMostradas = _todas.where((p) {
+          return p.titulo.toLowerCase().contains(q) ||
+              p.descripcion.toLowerCase().contains(q) ||
+              p.barrio.toLowerCase().contains(q) ||
+              p.ciudad.toLowerCase().contains(q);
         }).toList();
       }
     });
   }
 
-  /// Agrega o quita una propiedad de favoritos (RF-012).
-  void _toggleFavorito(int idPropiedad) {
-    setState(() {
-      if (_favoritosIds.contains(idPropiedad)) {
-        _favoritosIds.remove(idPropiedad);
+  Future<void> _toggleFavorito(int idPropiedad) async {
+    final esFav = _favoritosIds.contains(idPropiedad);
+    try {
+      if (esFav) {
+        await _favoritosService.quitar(idPropiedad);
       } else {
-        _favoritosIds.add(idPropiedad);
+        await _favoritosService.agregar(idPropiedad);
       }
-    });
-    // TODO: Llamar al backend para persistir el cambio.
+      setState(() {
+        if (esFav) {
+          _favoritosIds.remove(idPropiedad);
+        } else {
+          _favoritosIds.add(idPropiedad);
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
   }
 
-  /// Abre el bottom sheet de filtros (RF-010).
   void _abrirFiltros() {
     showModalBottomSheet(
       context: context,
@@ -78,7 +113,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Navega al detalle de una propiedad.
   void _irADetalle(Propiedad propiedad) {
     Navigator.push(
       context,
@@ -94,7 +128,6 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('MalasRaíces'),
         actions: [
-          // Botón de filtros en el AppBar.
           IconButton(
             icon: const Icon(Icons.tune),
             tooltip: 'Filtros',
@@ -102,47 +135,56 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-
-      // Menú lateral.
       drawer: _buildDrawer(),
-
       body: Column(
         children: [
-          // Barra de búsqueda (RF-009).
           _buildBarraBusqueda(),
-
-          // Lista de propiedades.
           Expanded(
-            child: _propiedadesMostradas.isEmpty
-                ? _buildSinResultados()
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    itemCount: _propiedadesMostradas.length,
-                    itemBuilder: (context, index) {
-                      final propiedad = _propiedadesMostradas[index];
-                      return PropertyCard(
-                        propiedad: propiedad,
-                        onTap: () => _irADetalle(propiedad),
-                        esFavorito: _favoritosIds.contains(
-                          propiedad.idPropiedad,
-                        ),
-                        onFavoritoTap: () =>
-                            _toggleFavorito(propiedad.idPropiedad),
-                      );
-                    },
+            child: _cargando
+                ? const Center(child: CircularProgressIndicator())
+                : RefreshIndicator(
+                    onRefresh: _cargarDatos,
+                    child: _propiedadesMostradas.isEmpty
+                        ? ListView(
+                            children: [
+                              SizedBox(
+                                height:
+                                    MediaQuery.of(context).size.height * 0.6,
+                                child: _buildSinResultados(),
+                              ),
+                            ],
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            itemCount: _propiedadesMostradas.length,
+                            itemBuilder: (context, index) {
+                              final propiedad = _propiedadesMostradas[index];
+                              return PropertyCard(
+                                propiedad: propiedad,
+                                onTap: () => _irADetalle(propiedad),
+                                esFavorito: _favoritosIds.contains(
+                                  propiedad.idPropiedad,
+                                ),
+                                onFavoritoTap: () =>
+                                    _toggleFavorito(propiedad.idPropiedad),
+                              );
+                            },
+                          ),
                   ),
           ),
         ],
       ),
-
-      // Botón flotante solo si es Propietario.
-      floatingActionButton: MockData.usuarioActual.esPropietario
+      floatingActionButton: (_usuarioActual?.esPropietario ?? false)
           ? FloatingActionButton.extended(
-              onPressed: () {
-                Navigator.pushNamed(context, AppRoutes.createProperty);
+              onPressed: () async {
+                final creada = await Navigator.pushNamed(
+                  context,
+                  AppRoutes.createProperty,
+                );
+                if (creada == true) _cargarDatos();
               },
               icon: const Icon(Icons.add),
               label: const Text('Publicar'),
@@ -153,7 +195,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Barra de búsqueda sobre fondo azul.
   Widget _buildBarraBusqueda() {
     return Container(
       color: AppTheme.primaryColor,
@@ -187,7 +228,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Vista cuando no hay resultados.
   Widget _buildSinResultados() {
     return Center(
       child: Column(
@@ -209,15 +249,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Menú lateral (Drawer).
   Widget _buildDrawer() {
-    final usuario = MockData.usuarioActual;
+    final usuario = _usuarioActual;
+
+    if (usuario == null) {
+      return const Drawer(child: Center(child: CircularProgressIndicator()));
+    }
 
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // Cabecera con info del usuario.
           DrawerHeader(
             decoration: const BoxDecoration(color: AppTheme.primaryColor),
             child: Column(
@@ -245,15 +287,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-
-          // Opciones de navegación.
           ListTile(
             leading: const Icon(Icons.home_outlined),
             title: const Text('Inicio'),
             onTap: () => Navigator.pop(context),
           ),
-
-          // Solo para Propietarios.
           if (usuario.esPropietario)
             ListTile(
               leading: const Icon(Icons.apartment_outlined),
@@ -263,7 +301,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pushNamed(context, AppRoutes.myProperties);
               },
             ),
-
           ListTile(
             leading: const Icon(Icons.favorite_outline),
             title: const Text('Favoritos'),
@@ -272,7 +309,6 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.pushNamed(context, AppRoutes.favorites);
             },
           ),
-
           ListTile(
             leading: const Icon(Icons.person_outline),
             title: const Text('Mi perfil'),
@@ -281,17 +317,21 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.pushNamed(context, AppRoutes.profile);
             },
           ),
-
           const Divider(),
-
           ListTile(
             leading: const Icon(Icons.logout, color: AppTheme.errorColor),
             title: const Text(
               'Cerrar sesión',
               style: TextStyle(color: AppTheme.errorColor),
             ),
-            onTap: () {
-              Navigator.pushReplacementNamed(context, AppRoutes.login);
+            onTap: () async {
+              await _authService.logout();
+              if (!context.mounted) return;
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                AppRoutes.login,
+                (route) => false,
+              );
             },
           ),
         ],
